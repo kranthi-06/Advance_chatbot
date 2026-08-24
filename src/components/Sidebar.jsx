@@ -212,7 +212,7 @@ export default function Sidebar({ currentLanguage, onLanguageChange, currentDoma
                             </div>
                         </div>
                         <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-                            Groq LLaMA 3.1 • Gemini 2.5 Flash
+                            Groq Qwen 3.6 • Gemini 2.5 Flash
                         </p>
                         <div style={{ display: 'flex', gap: '4px', marginTop: '6px' }}>
                             <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#58a6ff' }} />
