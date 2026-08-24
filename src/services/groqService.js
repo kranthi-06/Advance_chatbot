@@ -5,9 +5,69 @@ const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 export class GroqService {
   constructor() {
     this.apiKey = GROQ_API_KEY;
-    this.textModel = null; // Will be resolved dynamically
+    this.textModel = null; // Will be resolved by testing
     this.visionModel = 'llama-3.2-11b-vision-preview'; // Fallback if needed, but we'll use Gemini
     this.geminiModel = 'gemini-2.5-flash';
+  }
+
+  // ===== HELPER: Resolve and test a working model =====
+  async _resolveWorkingModel() {
+    if (this.textModel) return this.textModel;
+
+    // Hardcoded highly-available fallbacks
+    let candidates = [
+      'llama-3.1-8b-instant',
+      'llama-3.2-11b-vision-preview',
+      'llama3-8b-8192',
+      'mixtral-8x7b-32768',
+      'gemma2-9b-it'
+    ];
+
+    try {
+      const modelsRes = await fetch('https://api.groq.com/openai/v1/models', {
+        headers: { 'Authorization': `Bearer ${this.apiKey}` }
+      });
+      if (modelsRes.ok) {
+        const modelsData = await modelsRes.json();
+        if (modelsData && modelsData.data && Array.isArray(modelsData.data)) {
+          const apiModels = modelsData.data.map(m => m.id);
+          // Combine standard fallbacks with dynamically fetched models (unique only)
+          candidates = [...new Set([...candidates, ...apiModels])];
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to fetch models list, using standard fallback candidates', e);
+    }
+
+    // Test candidates sequentially until one works
+    for (const model of candidates) {
+      if (!model) continue;
+      try {
+        const testRes = await fetch(GROQ_API_URL, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: model,
+            messages: [{ role: 'user', content: 'test' }],
+            max_tokens: 1
+          })
+        });
+        
+        if (testRes.ok) {
+           this.textModel = model;
+           console.log(`Successfully verified and selected Groq model: ${model}`);
+           return model;
+        }
+      } catch (err) {
+        // Network or fetch error, skip to next
+        continue;
+      }
+    }
+
+    throw new Error('Could not find any available Groq models that your API key has access to. Please check your account limits.');
   }
 
   // ===== HELPER: Call Groq text API =====
@@ -16,31 +76,8 @@ export class GroqService {
       throw new Error('Groq API Key is missing. Please check your .env file or settings.');
     }
 
-    // Dynamically resolve an available model
-    if (!this.textModel) {
-      try {
-        const modelsRes = await fetch('https://api.groq.com/openai/v1/models', {
-          headers: { 'Authorization': `Bearer ${this.apiKey}` }
-        });
-        if (modelsRes.ok) {
-          const modelsData = await modelsRes.json();
-          const activeModels = modelsData.data.map(m => m.id);
-          
-          // Try to find a reliable general purpose text model
-          this.textModel = activeModels.find(m => m.includes('llama-3.1-8b')) ||
-                           activeModels.find(m => m.includes('llama3-8b')) ||
-                           activeModels.find(m => m.includes('mixtral')) ||
-                           activeModels.find(m => m.includes('gemma')) ||
-                           activeModels.find(m => m.includes('llama')) ||
-                           activeModels[0]; // Ultimate fallback to whatever is first
-        } else {
-          this.textModel = 'llama-3.1-8b-instant'; // Hard fallback
-        }
-      } catch (err) {
-        console.warn('Failed to fetch Groq models list', err);
-        this.textModel = 'llama-3.1-8b-instant';
-      }
-    }
+    // Ensure we have a proven, working model before generating
+    const activeModel = await this._resolveWorkingModel();
 
     const response = await fetch(GROQ_API_URL, {
       method: 'POST',
@@ -49,7 +86,7 @@ export class GroqService {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: this.textModel,
+        model: activeModel,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userMessage }
