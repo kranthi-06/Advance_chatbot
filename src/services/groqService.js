@@ -56,7 +56,7 @@ export class GroqService {
               { role: 'system', content: 'test' },
               { role: 'user', content: 'test' }
             ],
-            max_tokens: 1
+            max_tokens: 4000
           })
         });
         
@@ -95,7 +95,8 @@ export class GroqService {
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userMessage }
         ],
-        temperature
+        temperature,
+        max_tokens: maxTokens
       })
     });
 
@@ -324,25 +325,25 @@ Respond ENTIRELY in ${langName}.`;
   async generateQuiz(topic, numQuestions = 10) {
     const systemPrompt = `You are a quiz generator AI. Generate exactly ${numQuestions} multiple-choice questions on the topic: "${topic}".
 
-YOU MUST return a valid JSON array with this exact structure (NO markdown, NO code blocks, ONLY raw JSON):
-[
-  {
-    "id": 1,
-    "question": "What is...?",
-    "options": ["A) option1", "B) option2", "C) option3", "D) option4"],
-    "correct": 0,
-    "explanation": "Brief explanation of the correct answer."
-  }
-]
+YOU MUST return a valid JSON object with this exact structure:
+{
+  "quiz": [
+    {
+      "id": 1,
+      "question": "What is...?",
+      "options": ["A) option1", "B) option2", "C) option3", "D) option4"],
+      "correct": 0,
+      "explanation": "Brief explanation of the correct answer."
+    }
+  ]
+}
 
 RULES:
 - Generate EXACTLY ${numQuestions} questions
 - Each question has exactly 4 options (A, B, C, D)
 - "correct" is the zero-based index (0=A, 1=B, 2=C, 3=D)
 - Mix difficulty: easy, medium, and some challenging
-- Questions should test genuine understanding
-- Explanations should be clear and educational
-- Return ONLY the JSON array, nothing else`;
+- Explanations should be clear and educational`;
 
     const activeModel = await this._resolveWorkingModel();
 
@@ -356,9 +357,11 @@ RULES:
         model: activeModel,
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: `Generate ${numQuestions} MCQ questions about: ${topic}` }
+          { role: 'user', content: `Generate ${numQuestions} MCQ questions about: ${topic}. Output JSON.` }
         ],
-        temperature: 0.8
+        temperature: 0.8,
+        max_tokens: 4000,
+        response_format: { type: "json_object" }
       })
     });
 
@@ -368,18 +371,14 @@ RULES:
     }
 
     const data = await response.json();
-    const content = data.choices[0]?.message?.content || '[]';
+    const content = data.choices[0]?.message?.content || '{"quiz": []}';
 
     try {
-      let jsonStr = content.trim();
-      // Remove any markdown code block wrappers
-      if (jsonStr.startsWith('```')) {
-        jsonStr = jsonStr.replace(/^```(json)?\n?/i, '').replace(/\n?```$/i, '');
+      const parsed = JSON.parse(content);
+      if (parsed.quiz && Array.isArray(parsed.quiz)) {
+        return parsed.quiz;
       }
-      
-      const jsonMatch = jsonStr.match(/\[[\s\S]*\]/);
-      if (jsonMatch) jsonStr = jsonMatch[0];
-      return JSON.parse(jsonStr);
+      throw new Error('Invalid schema');
     } catch (e) {
       console.error('Failed to parse quiz JSON:', e, content);
       throw new Error('Failed to generate quiz. The AI response was not in a valid format. Please try again.');
