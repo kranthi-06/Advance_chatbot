@@ -91,8 +91,7 @@ export class GroqService {
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userMessage }
         ],
-        temperature,
-        max_tokens: maxTokens
+        temperature
       })
     });
 
@@ -355,8 +354,7 @@ RULES:
           { role: 'system', content: systemPrompt },
           { role: 'user', content: `Generate ${numQuestions} MCQ questions about: ${topic}` }
         ],
-        temperature: 0.8,
-        max_tokens: 6000
+        temperature: 0.8
       })
     });
 
