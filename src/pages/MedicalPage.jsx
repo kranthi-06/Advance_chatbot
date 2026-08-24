@@ -16,12 +16,30 @@ export default function MedicalPage({ language = 'en' }) {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [error, setError] = useState(null);
     const [inputMode, setInputMode] = useState('upload');
+    const [dragActive, setDragActive] = useState(false);
     const fileInputRef = useRef(null);
 
     const currentLangInfo = LANGUAGES.find(l => l.code === language) || LANGUAGES[0];
 
     const handleFileUpload = (e) => {
-        const file = e.target.files[0];
+        const file = e.target.files?.[0];
+        processFile(file);
+    };
+
+    const handleDrop = (e) => {
+        e.preventDefault();
+        setDragActive(false);
+        const file = e.dataTransfer.files?.[0];
+        processFile(file);
+    };
+
+    const handleDrag = (e) => {
+        e.preventDefault();
+        if (e.type === 'dragenter' || e.type === 'dragover') setDragActive(true);
+        else if (e.type === 'dragleave') setDragActive(false);
+    };
+
+    const processFile = (file) => {
         if (!file) return;
         setError(null);
 
@@ -147,7 +165,14 @@ export default function MedicalPage({ language = 'en' }) {
                         </div>
 
                         {inputMode === 'upload' ? (
-                            <div className="upload-zone" id="upload-zone">
+                            <div 
+                                className={`upload-zone ${dragActive ? 'drag-active' : ''}`} 
+                                id="upload-zone"
+                                onDragEnter={handleDrag}
+                                onDragLeave={handleDrag}
+                                onDragOver={handleDrag}
+                                onDrop={handleDrop}
+                            >
                                 <input
                                     type="file"
                                     ref={fileInputRef}

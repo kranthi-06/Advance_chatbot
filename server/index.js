@@ -41,8 +41,12 @@ const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/chartbot_a
 mongoose.connect(MONGO_URI)
   .then(() => {
     console.log('Connected to MongoDB');
-    httpServer.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
-    });
   })
-  .catch(err => console.error('MongoDB connection error:', err));
+  .catch(err => {
+    console.error('MongoDB connection error. Please ensure MongoDB is running:', err.message);
+  });
+
+// Start server regardless of DB connection so the frontend can at least load
+httpServer.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});

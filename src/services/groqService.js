@@ -5,13 +5,16 @@ const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 export class GroqService {
   constructor() {
     this.apiKey = GROQ_API_KEY;
-    this.textModel = 'qwen/qwen3.6-27b';
+    this.textModel = 'llama3-70b-8192'; // More stable Groq model
     this.visionModel = 'llama-3.2-11b-vision-preview'; // Fallback if needed, but we'll use Gemini
     this.geminiModel = 'gemini-2.5-flash';
   }
 
   // ===== HELPER: Call Groq text API =====
   async _callGroqText(systemPrompt, userMessage, temperature = 0.7, maxTokens = 3000) {
+    if (!this.apiKey) {
+      throw new Error('Groq API Key is missing. Please check your .env file or settings.');
+    }
     const response = await fetch(GROQ_API_URL, {
       method: 'POST',
       headers: {
@@ -40,6 +43,9 @@ export class GroqService {
 
   // ===== HELPER: Call Gemini vision API =====
   async _callGeminiVision(prompt, imageBase64, temperature = 0.3, maxTokens = 4000) {
+    if (!GEMINI_API_KEY) {
+      throw new Error('Gemini API Key is missing. Please check your .env file or settings.');
+    }
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.geminiModel}:generateContent?key=${GEMINI_API_KEY}`;
     const base64Data = imageBase64.includes(',') ? imageBase64.split(',')[1] : imageBase64;
 
@@ -297,13 +303,18 @@ RULES:
     const content = data.choices[0]?.message?.content || '[]';
 
     try {
-      let jsonStr = content;
-      const jsonMatch = content.match(/\[[\s\S]*\]/);
+      let jsonStr = content.trim();
+      // Remove any markdown code block wrappers
+      if (jsonStr.startsWith('```')) {
+        jsonStr = jsonStr.replace(/^```(json)?\n?/i, '').replace(/\n?```$/i, '');
+      }
+      
+      const jsonMatch = jsonStr.match(/\[[\s\S]*\]/);
       if (jsonMatch) jsonStr = jsonMatch[0];
       return JSON.parse(jsonStr);
     } catch (e) {
       console.error('Failed to parse quiz JSON:', e, content);
-      throw new Error('Failed to generate quiz. Please try again.');
+      throw new Error('Failed to generate quiz. The AI response was not in a valid format. Please try again.');
     }
   }
 

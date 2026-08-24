@@ -28,6 +28,8 @@ import {
   getStateByKey,
 } from '../../shared/indiaLocations.js';
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 const heroStats = [
   {
     label: 'India coverage',
@@ -67,6 +69,7 @@ const workflowSteps = [
 export default function CropAdvisorPage({ language }) {
   const { t } = useTranslation();
   const [crops, setCrops] = useState([]);
+  const [fetchingCrops, setFetchingCrops] = useState(true);
   const [selectedState, setSelectedState] = useState('');
   const [selectedCity, setSelectedCity] = useState('');
   const [selectedCrop, setSelectedCrop] = useState('');
@@ -80,16 +83,23 @@ export default function CropAdvisorPage({ language }) {
   const [analyzedSignature, setAnalyzedSignature] = useState('');
 
   useEffect(() => {
-    fetch(`http://localhost:5000/api/crops?lang=${language}`)
+    setFetchingCrops(true);
+    fetch(`${API_BASE_URL}/api/crops?lang=${language}`)
       .then((response) => response.json())
-      .then((data) => setCrops(data))
-      .catch(() => setError('Unable to load crop profiles right now.'));
+      .then((data) => {
+        setCrops(data);
+        setFetchingCrops(false);
+      })
+      .catch(() => {
+        setError('Unable to load crop profiles right now.');
+        setFetchingCrops(false);
+      });
   }, [language]);
 
   useEffect(() => {
     if (!analysisLocation?.locationKey) return undefined;
 
-    const socket = io('http://localhost:5000');
+    const socket = io(API_BASE_URL);
     socket.on('iot_data_update', (data) => {
       if (data.location !== analysisLocation.locationKey) return;
 
@@ -154,7 +164,7 @@ export default function CropAdvisorPage({ language }) {
     setError('');
 
     try {
-      const response = await fetch('http://localhost:5000/api/analyze', {
+      const response = await fetch(`${API_BASE_URL}/api/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -310,7 +320,9 @@ export default function CropAdvisorPage({ language }) {
               </div>
 
               <div>
-                <label className="advisor-field-label">Step 3 • Crop</label>
+                <label className="advisor-field-label">
+                  Step 3 • Crop {fetchingCrops && <span className="text-gray-400 text-xs ml-2 animate-pulse">(Loading...)</span>}
+                </label>
                 <SearchableSelect
                   options={cropOptions}
                   value={selectedCrop}
@@ -318,9 +330,10 @@ export default function CropAdvisorPage({ language }) {
                     setSelectedCrop(nextCrop);
                     setError('');
                   }}
-                  placeholder="Select crop type"
+                  placeholder={fetchingCrops ? "Loading crops..." : "Select crop type"}
                   searchPlaceholder="Search crop profiles"
                   icon={Wheat}
+                  disabled={fetchingCrops}
                 />
               </div>
             </div>
