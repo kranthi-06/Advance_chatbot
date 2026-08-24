@@ -27,6 +27,7 @@ import {
   getCityOptionsByState,
   getStateByKey,
 } from '../../shared/indiaLocations.js';
+import { FALLBACK_CROPS } from '../../shared/cropData.js';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -85,13 +86,30 @@ export default function CropAdvisorPage({ language }) {
   useEffect(() => {
     setFetchingCrops(true);
     fetch(`${API_BASE_URL}/api/crops?lang=${language}`)
-      .then((response) => response.json())
+      .then((response) => {
+        if (!response.ok) throw new Error('API error');
+        return response.json();
+      })
       .then((data) => {
-        setCrops(data);
+        if (data && data.length > 0) {
+          setCrops(data);
+        } else {
+          // API returned empty, use fallback
+          setCrops(FALLBACK_CROPS.map(c => ({
+            key: c.key,
+            name: c.name[language] || c.name.en || c.key,
+            idealConditions: c.idealConditions
+          })));
+        }
         setFetchingCrops(false);
       })
       .catch(() => {
-        setError('Unable to load crop profiles right now.');
+        // API unreachable (e.g., Vercel deployment without backend), use fallback crops
+        setCrops(FALLBACK_CROPS.map(c => ({
+          key: c.key,
+          name: c.name[language] || c.name.en || c.key,
+          idealConditions: c.idealConditions
+        })));
         setFetchingCrops(false);
       });
   }, [language]);
