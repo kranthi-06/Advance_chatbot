@@ -5,7 +5,7 @@ const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 export class GroqService {
   constructor() {
     this.apiKey = GROQ_API_KEY;
-    this.textModel = 'llama3-8b-8192'; // Standard Groq model available on all tiers
+    this.textModel = null; // Will be resolved dynamically
     this.visionModel = 'llama-3.2-11b-vision-preview'; // Fallback if needed, but we'll use Gemini
     this.geminiModel = 'gemini-2.5-flash';
   }
@@ -15,6 +15,33 @@ export class GroqService {
     if (!this.apiKey) {
       throw new Error('Groq API Key is missing. Please check your .env file or settings.');
     }
+
+    // Dynamically resolve an available model
+    if (!this.textModel) {
+      try {
+        const modelsRes = await fetch('https://api.groq.com/openai/v1/models', {
+          headers: { 'Authorization': `Bearer ${this.apiKey}` }
+        });
+        if (modelsRes.ok) {
+          const modelsData = await modelsRes.json();
+          const activeModels = modelsData.data.map(m => m.id);
+          
+          // Try to find a reliable general purpose text model
+          this.textModel = activeModels.find(m => m.includes('llama-3.1-8b')) ||
+                           activeModels.find(m => m.includes('llama3-8b')) ||
+                           activeModels.find(m => m.includes('mixtral')) ||
+                           activeModels.find(m => m.includes('gemma')) ||
+                           activeModels.find(m => m.includes('llama')) ||
+                           activeModels[0]; // Ultimate fallback to whatever is first
+        } else {
+          this.textModel = 'llama-3.1-8b-instant'; // Hard fallback
+        }
+      } catch (err) {
+        console.warn('Failed to fetch Groq models list', err);
+        this.textModel = 'llama-3.1-8b-instant';
+      }
+    }
+
     const response = await fetch(GROQ_API_URL, {
       method: 'POST',
       headers: {
