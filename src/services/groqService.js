@@ -17,7 +17,6 @@ export class GroqService {
     // Hardcoded highly-available fallbacks
     let candidates = [
       'llama-3.1-8b-instant',
-      'llama-3.2-11b-vision-preview',
       'llama3-8b-8192',
       'mixtral-8x7b-32768',
       'gemma2-9b-it'
@@ -30,7 +29,9 @@ export class GroqService {
       if (modelsRes.ok) {
         const modelsData = await modelsRes.json();
         if (modelsData && modelsData.data && Array.isArray(modelsData.data)) {
-          const apiModels = modelsData.data.map(m => m.id);
+          const apiModels = modelsData.data
+            .map(m => m.id)
+            .filter(id => !id.includes('guard') && !id.includes('whisper') && !id.includes('vision'));
           // Combine standard fallbacks with dynamically fetched models (unique only)
           candidates = [...new Set([...candidates, ...apiModels])];
         }
@@ -51,7 +52,10 @@ export class GroqService {
           },
           body: JSON.stringify({
             model: model,
-            messages: [{ role: 'user', content: 'test' }],
+            messages: [
+              { role: 'system', content: 'test' },
+              { role: 'user', content: 'test' }
+            ],
             max_tokens: 1
           })
         });
