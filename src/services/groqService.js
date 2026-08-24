@@ -341,6 +341,8 @@ RULES:
 - Explanations should be clear and educational
 - Return ONLY the JSON array, nothing else`;
 
+    const activeModel = await this._resolveWorkingModel();
+
     const response = await fetch(GROQ_API_URL, {
       method: 'POST',
       headers: {
@@ -348,7 +350,7 @@ RULES:
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: this.textModel,
+        model: activeModel,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: `Generate ${numQuestions} MCQ questions about: ${topic}` }
