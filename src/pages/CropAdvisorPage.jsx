@@ -28,6 +28,10 @@ import {
   getStateByKey,
 } from '../../shared/indiaLocations.js';
 import { FALLBACK_CROPS } from '../../shared/cropData.js';
+import { fetchVirtualIoTDataLocal, generateDecisionLocal } from '../services/localAnalysis.js';
+import {
+  resolveIndiaLocation,
+} from '../../shared/indiaLocations.js';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -205,7 +209,24 @@ export default function CropAdvisorPage({ language }) {
       setAnalysisTimestamp(data.sensorData?.observedAt || new Date().toISOString());
       setAnalyzedSignature(currentSignature);
     } catch (analysisError) {
-      setError(analysisError.message || 'Unable to generate the crop advisory.');
+      // Backend unreachable — run analysis locally
+      try {
+        const resolvedLocation = resolveIndiaLocation({ stateKey: selectedState, cityName: selectedCity.trim() });
+        if (!resolvedLocation) throw new Error('Invalid location');
+
+        const crop = FALLBACK_CROPS.find(c => c.key === selectedCrop) || null;
+        const localSensorData = fetchVirtualIoTDataLocal(resolvedLocation.coordinates, resolvedLocation);
+        const localDecision = generateDecisionLocal(localSensorData, crop, language);
+
+        setSensorData(localSensorData);
+        setDecision(localDecision);
+        setAnalysisLocation(resolvedLocation);
+        setAnalysisCrop(crop ? { key: crop.key, name: crop.name?.[language] || crop.name?.en || crop.key } : null);
+        setAnalysisTimestamp(localSensorData.observedAt || new Date().toISOString());
+        setAnalyzedSignature(currentSignature);
+      } catch (localError) {
+        setError(localError.message || 'Unable to generate the crop advisory.');
+      }
     } finally {
       setLoading(false);
     }
