@@ -5,7 +5,7 @@ const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 export class GroqService {
   constructor() {
     this.apiKey = GROQ_API_KEY;
-    this.textModel = 'llama-3.1-70b-versatile'; // Verified available Groq model
+    this.textModel = 'llama3-8b-8192'; // Standard Groq model available on all tiers
     this.visionModel = 'llama-3.2-11b-vision-preview'; // Fallback if needed, but we'll use Gemini
     this.geminiModel = 'gemini-2.5-flash';
   }
