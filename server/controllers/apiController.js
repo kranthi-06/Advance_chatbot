@@ -3,11 +3,25 @@ import Location from '../models/Location.js';
 import { fetchVirtualIoTData } from '../services/virtualIoTService.js';
 import { generateDecision } from '../services/aiDecisionEngine.js';
 import { resolveIndiaLocation } from '../../shared/indiaLocations.js';
+import { FALLBACK_CROPS } from '../../shared/cropData.js';
 
 export const getCrops = async (req, res) => {
   try {
     const lang = req.query.lang || 'en';
-    const crops = await Crop.find({});
+
+    // Try MongoDB first
+    let crops = [];
+    try {
+      crops = await Crop.find({});
+    } catch (dbErr) {
+      console.warn('MongoDB unavailable for crops, using fallback data');
+    }
+
+    // If DB returned nothing, use fallback
+    if (!crops || crops.length === 0) {
+      crops = FALLBACK_CROPS;
+    }
+
     const localizedCrops = crops.map(c => ({
       key: c.key,
       name: c.name[lang] || c.name.en || c.key,
@@ -22,7 +36,12 @@ export const getCrops = async (req, res) => {
 export const getLocations = async (req, res) => {
   try {
     const lang = req.query.lang || 'en';
-    const locations = await Location.find({});
+    let locations = [];
+    try {
+      locations = await Location.find({});
+    } catch (dbErr) {
+      console.warn('MongoDB unavailable for locations');
+    }
     const localizedLocations = locations.map(l => ({
       key: l.key,
       name: l.name[lang] || l.name.en || l.key,
@@ -44,7 +63,12 @@ export const analyzeVirtualIoT = async (req, res) => {
     if (stateKey && cityName) {
       resolvedLocation = resolveIndiaLocation({ stateKey, cityName });
     } else if (locationKey) {
-      const location = await Location.findOne({ key: locationKey });
+      let location = null;
+      try {
+        location = await Location.findOne({ key: locationKey });
+      } catch (dbErr) {
+        console.warn('MongoDB unavailable for location lookup');
+      }
       if (location) {
         resolvedLocation = {
           country: 'India',
@@ -65,8 +89,18 @@ export const analyzeVirtualIoT = async (req, res) => {
       return res.status(400).json({ error: 'Please select a valid Indian state and city.' });
     }
 
+    // Try MongoDB first, then fallback to hardcoded data
     let crop = null;
-    if (cropKey) crop = await Crop.findOne({ key: cropKey });
+    if (cropKey) {
+      try {
+        crop = await Crop.findOne({ key: cropKey });
+      } catch (dbErr) {
+        console.warn('MongoDB unavailable for crop lookup, using fallback');
+      }
+      if (!crop) {
+        crop = FALLBACK_CROPS.find(c => c.key === cropKey) || null;
+      }
+    }
 
     const sensorData = await fetchVirtualIoTData(resolvedLocation.coordinates, resolvedLocation);
 
