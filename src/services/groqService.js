@@ -10,16 +10,22 @@ export class GroqService {
     this.geminiModel = 'gemini-2.5-flash';
   }
 
-  // ===== HELPER: Resolve and test a working model =====
+  // ===== HELPER: Resolve a working chat model =====
   async _resolveWorkingModel() {
     if (this.textModel) return this.textModel;
 
-    // Hardcoded highly-available fallbacks
-    let candidates = [
+    // Preferred models in priority order (known to support chat completions with system+user)
+    const preferredModels = [
+      'meta-llama/llama-4-scout-17b-16e-instruct',
+      'qwen/qwen3-32b',
+      'deepseek-r1-distill-llama-70b',
+      'llama-3.3-70b-versatile',
       'llama-3.1-8b-instant',
       'llama3-8b-8192',
       'mixtral-8x7b-32768',
-      'gemma2-9b-it'
+      'gemma2-9b-it',
+      'compound-beta',
+      'compound-beta-mini'
     ];
 
     try {
@@ -28,50 +34,43 @@ export class GroqService {
       });
       if (modelsRes.ok) {
         const modelsData = await modelsRes.json();
-        if (modelsData && modelsData.data && Array.isArray(modelsData.data)) {
-          const apiModels = modelsData.data
+        if (modelsData?.data && Array.isArray(modelsData.data)) {
+          const availableIds = new Set(modelsData.data.map(m => m.id));
+
+          // Pick the first preferred model that exists in the available list
+          for (const model of preferredModels) {
+            if (availableIds.has(model)) {
+              this.textModel = model;
+              console.log(`Selected Groq model: ${model}`);
+              return model;
+            }
+          }
+
+          // Fallback: pick any model that looks like a chat model
+          const chatModel = modelsData.data
             .map(m => m.id)
-            .filter(id => !id.includes('guard') && !id.includes('whisper') && !id.includes('vision'));
-          // Combine standard fallbacks with dynamically fetched models (unique only)
-          candidates = [...new Set([...candidates, ...apiModels])];
+            .filter(id =>
+              !id.includes('guard') &&
+              !id.includes('whisper') &&
+              !id.includes('vision') &&
+              !id.includes('distil-whisper') &&
+              !id.includes('tts')
+            )[0];
+
+          if (chatModel) {
+            this.textModel = chatModel;
+            console.log(`Fallback Groq model: ${chatModel}`);
+            return chatModel;
+          }
         }
       }
     } catch (e) {
-      console.warn('Failed to fetch models list, using standard fallback candidates', e);
+      console.warn('Failed to fetch Groq models list:', e.message);
     }
 
-    // Test candidates sequentially until one works
-    for (const model of candidates) {
-      if (!model) continue;
-      try {
-        const testRes = await fetch(GROQ_API_URL, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            model: model,
-            messages: [
-              { role: 'system', content: 'test' },
-              { role: 'user', content: 'test' }
-            ],
-            max_tokens: 4000
-          })
-        });
-        
-        if (testRes.ok) {
-           this.textModel = model;
-           console.log(`Successfully verified and selected Groq model: ${model}`);
-           return model;
-        }
-      } catch (err) {
-        // Network or fetch error, skip to next
-        continue;
-      }
-    }
-
-    throw new Error('Could not find any available Groq models that your API key has access to. Please check your account limits.');
+    // Ultimate hardcoded fallback
+    this.textModel = 'meta-llama/llama-4-scout-17b-16e-instruct';
+    return this.textModel;
   }
 
   // ===== HELPER: Call Groq text API =====
